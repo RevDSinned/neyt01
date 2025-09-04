@@ -19,7 +19,7 @@ KEYWORDS_TXT = OUT / "keywords.txt"
 
 # ---------- Env / Clients ----------
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
-client = OpenAI(api_key=OPENAI_API_KEY)
+client = OpenAI()
 
 ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY", "")
 ELEVENLABS_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "")

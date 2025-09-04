@@ -172,7 +172,7 @@ def pick_topic(cfg) -> str:
 def write_script(cfg, topic: str) -> str:
     sys = system_writer()
     ask = (
-        f"Write a natural, human-sounding narration for a {cfg.get('duration_minutes',1)}-minute YouTube video titled:\n"
+        f"Write a natural, human-sounding narration for a {cfg.get('duration_minutes',10)}-minute YouTube video titled:\n"
         f"{topic}\n\n"
         "Hook in 10s, clear structure, concrete prices, crisp sentences. Output narration only."
     )
@@ -431,12 +431,12 @@ def build_video(image_paths: List[pathlib.Path], audio_path: pathlib.Path, out_p
 
     if audio_path.exists() and audio_path.stat().st_size > 0:
         audio = AudioFileClip(str(audio_path))
-        total = max(1.0, audio.duration)
+        total = max(10.0, audio.duration)
     else:
         audio = None
         total = 60.0
 
-    per = total / max(1, len(image_paths))
+    per = total / max(10, len(image_paths))
     clips = [ImageClip(str(p)).set_duration(per).resize(height=1080).on_color(size=(1920,1080), color=(0,0,0))
              for p in image_paths]
     video = concatenate_videoclips(clips, method="compose")
@@ -505,7 +505,7 @@ def run():
     print("→ Narration (ElevenLabs)…")
     elevenlabs_tts(cfg, normalize_numbers_for_voice(script2), VOICE_MP3)
 
-    dur = max(1.0, seconds_from_mp3(VOICE_MP3))
+    dur = max(10.0, seconds_from_mp3(VOICE_MP3))
     print(f"Narration length: {dur:.1f}s")
 
     print("→ Fetching images…")

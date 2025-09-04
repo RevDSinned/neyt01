@@ -200,8 +200,8 @@ def extract_broll_keywords(cfg, script: str) -> list[str]:
     # 1) Ask the model for a structured, chapter-wise plan (JSON)
     sys = (
         "You are a travel-video b-roll planner. Read the script and return compact JSON with:\n"
-        "{ \"global\": [10 concise keywords],\n"
-        "  \"chapters\": [ {\"title\": \"...\", \"keywords\": [10-12 concise keywords]} ] }\n"
+        "{ \"global\": [ concise keywords],\n"
+        "  \"chapters\": [ {\"title\": \"...\", \"keywords\": [-12 concise keywords]} ] }\n"
         "Use concrete nouns and scenes that match travel + MONEY when relevant "
         "(e.g., cash close-up, currency exchange board, market price signs, ATM withdrawal, "
         "credit card tap, budget accommodation room, bus/metro/plane). "
@@ -431,7 +431,7 @@ def build_video(image_paths: List[pathlib.Path], audio_path: pathlib.Path, out_p
 
     if audio_path.exists() and audio_path.stat().st_size > 0:
         audio = AudioFileClip(str(audio_path))
-        total = max(10.0, audio.duration)
+        total = max(1.0, audio.duration)
     else:
         audio = None
         total = 60.0

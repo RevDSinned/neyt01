@@ -3,8 +3,9 @@ name: nomad-econ-yt
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 14 * * 1-5"
-    - cron: "0 15 * * 1-5"
+    - cron: "59 19 * * 6"
+    - cron: "59 19 * * 0"
+
 
 jobs:
   build-run:

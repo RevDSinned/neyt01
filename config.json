@@ -1,0 +1,26 @@
+{
+  "channel_name": "Nomad Economics",
+  "duration_minutes": 10,
+  "privacy_status": "public",
+  "category_id": "19",
+  "writer_model": "gpt-5",
+  "critic_model": "gpt-4o-mini",
+  "image_model": "gpt-image-1",
+  "tts_model": "gpt-4o-mini-tts",
+  "voice": "alloy",
+  "topic_mode": "auto",
+  "topic_seeds": [
+    "travel on a budget",
+    "digital nomad jobs",
+    "cheap countries to live well",
+    "slow travel costs vs fast travel",
+    "backpacking vs suitcase economics",
+    "credit cards & points for travelers",
+    "visa runs & cost planning",
+    "remote income stacks (freelance + teaching + content)",
+    "gear that actually saves money",
+    "city price breakdowns (accom/food/transport/phone)"
+  ],
+  "avoid_terms": ["clickbait", "get rich quick"],
+  "thumb_style": "bold sans, high-contrast, 2-3 words"
+}

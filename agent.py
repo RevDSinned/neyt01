@@ -262,7 +262,7 @@ def build_video(image_paths: List[pathlib.Path], audio_path: pathlib.Path, out_p
 def make_thumbnail(title: str, cfg: dict) -> pathlib.Path:
     try:
         prompt = f"Bold, high-contrast travel thumbnail background, no text. Topic: {title}"
-        r = client.images.generate(model=cfg.get("image_model", "gpt-image-1"), prompt=prompt, size="1024x576")
+        r = client.images.generate(model=cfg.get("image_model", "gpt-image-1"), prompt=prompt, size="1536x1024")
         b64 = r.data[0].b64_json
         Image.open(io.BytesIO(base64.b64decode(b64))).save(THUMB, "PNG")
     except Exception as e:
@@ -277,17 +277,17 @@ def maybe_upload_to_youtube(cfg: dict, title: str, description: str, video_path:
         return
     try:
         from youtube_uploader import upload_video
-        upload_video(
-            video_path=str(video_path),
-            title=title,
-            description=description,
-            thumbnail_path=str(thumb_path) if thumb_path.exists() else None,
-            privacy_status=cfg.get("privacy_status", "public"),
-            category_id=str(cfg.get("category_id", "19")),
-            client_id=YT_CLIENT_ID,
-            client_secret=YT_CLIENT_SECRET,
-            refresh_token=YT_REFRESH_TOKEN,
-        )
+       upload_video(
+    str(video_path),
+    title,
+    description,
+    str(thumb_path) if thumb_path.exists() else None,
+    cfg.get("privacy_status", "public"),
+    str(cfg.get("category_id", "19")),
+    YT_CLIENT_ID,
+    YT_CLIENT_SECRET,
+    YT_REFRESH_TOKEN,
+)
     except Exception as e:
         print(f"YouTube upload skipped: {e}")
 

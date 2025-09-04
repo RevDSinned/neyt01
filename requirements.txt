@@ -8,3 +8,4 @@ requests==2.32.3
 python-dotenv==1.0.1
 imageio==2.31.0
 imageio-ffmpeg==0.4.9
+num2words==0.5.13

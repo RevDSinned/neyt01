@@ -183,7 +183,114 @@ def critique_and_revise(cfg, script: str) -> str:
     ask = "Improve clarity, pacing, and retention cues. Keep length. Return revised narration only.\n\n" + script
     return chat(cfg["critic_model"], sys, ask)
 
-def extract_broll_keywords(cfg, script: str) -> List[str]:
+def extract_broll_keywords(cfg, script: str) -> list[str]:
+    """
+    Produce strong, chapter-aware b-roll keywords while filtering junk.
+    Returns a flat, de-duplicated list so the rest of the pipeline stays the same.
+    Also writes a structured plan to out/keywords.json for inspection.
+    """
+    import json, re
+
+    # Terms we never want (no more random cabbage or clip-arty stuff)
+    BLOCKLIST = {
+        "cabbage","lettuce","broccoli","cauliflower","salad","cartoon","clipart","vector",
+        "logo","pattern","wallpaper","abstract texture","template","comic","emoji","infographic"
+    }
+
+    # 1) Ask the model for a structured, chapter-wise plan (JSON)
+    sys = (
+        "You are a travel-video b-roll planner. Read the script and return compact JSON with:\n"
+        "{ \"global\": [10 concise keywords],\n"
+        "  \"chapters\": [ {\"title\": \"...\", \"keywords\": [10-12 concise keywords]} ] }\n"
+        "Use concrete nouns and scenes that match travel + MONEY when relevant "
+        "(e.g., cash close-up, currency exchange board, market price signs, ATM withdrawal, "
+        "credit card tap, budget accommodation room, bus/metro/plane). "
+        "No vague adjectives. No food unless the script explicitly mentions it. "
+        "Keywords should be short search phrases (2–4 words)."
+    )
+    txt = chat(cfg["critic_model"], sys, script)
+
+    plan = None
+    # try to parse JSON directly; if the model wrapped it in prose, extract the JSON blob
+    try:
+        plan = json.loads(txt)
+    except Exception:
+        m = re.search(r'\{.*\}', txt, flags=re.S)
+        if m:
+            try:
+                plan = json.loads(m.group(0))
+            except Exception:
+                plan = None
+
+    keywords: list[str] = []
+    structured = {"global": [], "chapters": []}
+
+    if isinstance(plan, dict):
+        g = plan.get("global", []) or []
+        keywords.extend(g)
+        for ch in plan.get("chapters", []) or []:
+            ks = ch.get("keywords", []) or []
+            structured["chapters"].append({"title": ch.get("title", ""), "keywords": ks})
+            keywords.extend(ks)
+        structured["global"] = g
+
+    # 2) Fallback if JSON failed: simple list like before, but tell it to favor money + location
+    if not keywords:
+        ask = (
+            "List 40 short, comma-separated b-roll search keywords (no numbering). "
+            "Favor money/finance visuals when the script references prices, budgets, cards, or cash; "
+            "otherwise prefer specific locations and travel scenes mentioned."
+        )
+        resp = chat(cfg["critic_model"], "You generate concise keyword lists.", ask + "\n\n" + script)
+        keywords = re.split(r"[,\n]", resp)
+
+    # 3) Clean, blocklist, and de-duplicate
+    cleaned: list[str] = []
+    seen = set()
+    for k in keywords:
+        k = (k or "").strip()
+        if not k:
+            continue
+        k = re.sub(r"[^a-zA-Z0-9\s\-'/,]+", "", k)           # drop odd chars
+        k = re.sub(r"\s+", " ", k).strip()
+        low = k.lower()
+        if low in seen:
+            continue
+        if any(b in low for b in BLOCKLIST):
+            continue
+        # discard overly generic single words
+        if len(k.split()) == 1 and k.lower() in {
+            "travel","city","street","building","nature","photo","landscape","people"
+        }:
+            continue
+        seen.add(low)
+        cleaned.append(k)
+
+    # 4) If the script talks about money, force-boost money visuals to the front
+    if re.search(r"\b(dollar|euro|peso|baht|yen|rupee|pound|card|cash|budget|price|cost|exchange|atm)\b",
+                 script, flags=re.I):
+        money_boost = [
+            "cash close up","counting money hands","credit card tap",
+            "currency exchange board","atm withdrawal","market price signs"
+        ]
+        for term in reversed(money_boost):  # insert at front preserving order
+            if term not in cleaned:
+                cleaned.insert(0, term)
+
+    # 5) Trim to a sensible maximum
+    cleaned = cleaned[:120]
+
+    # 6) Save the structured plan for review (optional)
+    try:
+        (OUT / "keywords.json").write_text(
+            json.dumps(structured, ensure_ascii=False, indent=2),
+            encoding="utf-8"
+        )
+    except Exception:
+        pass
+
+    return cleaned
+(cfg, script: str) -> List[str]:
     ask = "List 20 concise, comma-separated b-roll search keywords (no numbering)."
     resp = chat(cfg["critic_model"], "You generate concise keyword lists.", ask + "\n\n" + script)
     parts = [p.strip() for p in re.split(r"[,\n]", resp) if p.strip()]

@@ -172,7 +172,7 @@ def pick_topic(cfg) -> str:
 def write_script(cfg, topic: str) -> str:
     sys = system_writer()
     ask = (
-        f"Write a natural, human-sounding narration for a {cfg.get('duration_minutes',10)}-minute YouTube video titled:\n"
+        f"Write a natural, human-sounding narration for a {cfg.get('duration_minutes',1)}-minute YouTube video titled:\n"
         f"{topic}\n\n"
         "Hook in 10s, clear structure, concrete prices, crisp sentences. Output narration only."
     )

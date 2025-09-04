@@ -3,11 +3,21 @@
   "duration_minutes": 10,
   "privacy_status": "public",
   "category_id": "19",
+
   "writer_model": "gpt-5",
   "critic_model": "gpt-4o-mini",
   "image_model": "gpt-image-1",
-  "tts_model": "gpt-4o-mini-tts",
-  "voice": "alloy",
+
+  "tts_provider": "elevenlabs",
+  "elevenlabs_model_id": "eleven_multilingual_v2",
+  "elevenlabs_output_format": "mp3_44100_128",
+  "elevenlabs_voice_settings": {
+    "stability": 0.40,
+    "similarity_boost": 0.75,
+    "style": 0.25,
+    "use_speaker_boost": true
+  },
+
   "topic_mode": "auto",
   "topic_seeds": [
     "travel on a budget",

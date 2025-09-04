@@ -7,4 +7,3 @@ imageio-ffmpeg>=0.4.9
 pillow>=10.3.0
 requests>=2.32.3
 python-dotenv>=1.0.1
-numpy<2.0

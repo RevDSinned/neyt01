@@ -60,6 +60,7 @@ def normalize_numbers_for_voice(text: str) -> str:
     - General numbers: 1234 -> 'one thousand two hundred thirty four'
     """
     import re
+from num2words import num2words
 
     # --- helpers ---
     def num_words(n_str: str) -> str:
@@ -395,7 +396,8 @@ def run():
     save_text(KEYWORDS_TXT, ", ".join(kws))
 
     print("→ Narration (ElevenLabs)…")
-    elevenlabs_tts(cfg, script2, VOICE_MP3)
+    elevenlabs_tts(cfg, normalize_numbers_for_voice(script2), VOICE_MP3)
+
     dur = max(1.0, seconds_from_mp3(VOICE_MP3))
     print(f"Narration length: {dur:.1f}s")
 

@@ -6,6 +6,7 @@ import requests
 from PIL import Image, ImageDraw, ImageFont
 from moviepy.editor import ImageClip, AudioFileClip, concatenate_videoclips
 from openai import OpenAI
+from num2words import num2words
 
 # ---------- Paths ----------
 ROOT = pathlib.Path(__file__).parent
@@ -50,6 +51,88 @@ def seconds_from_mp3(path: pathlib.Path) -> float:
         return 0.0
     with AudioFileClip(str(path)) as a:
         return float(a.duration)
+def normalize_numbers_for_voice(text: str) -> str:
+    """
+    Convert numerals to words for narration:
+    - Years: pair-speak (e.g., 1665 -> 'sixteen sixty five'; 2025 -> 'twenty twenty five'; 1905 -> 'nineteen oh five'; 1900 -> 'nineteen hundred'; 2000 -> 'two thousand').
+    - Currency: $/€/£/¥/₹/฿ -> '... dollars/euros/pounds/yen/rupees/baht' (uses 'point' for decimals).
+    - Percentages: '12%' -> 'twelve percent'
+    - General numbers: 1234 -> 'one thousand two hundred thirty four'
+    """
+    import re
+
+    # --- helpers ---
+    def num_words(n_str: str) -> str:
+        # supports commas/decimals
+        s = n_str.replace(",", "")
+        if "." in s:
+            whole, frac = s.split(".", 1)
+            base = num2words(int(whole))
+            # spell decimal as "point five six"
+            frac_words = " ".join(num2words(int(d)) for d in frac if d.isdigit())
+            return f"{base} point {frac_words}" if frac_words else base
+        return num2words(int(s))
+
+    def year_to_words(y: int) -> str:
+        if y == 2000:
+            return "two thousand"
+        if 2010 <= y <= 2099:
+            last = y % 100
+            last_words = " ".join(num2words(last).replace("-", " ").split())
+            return f"twenty {last_words}"
+        if 2001 <= y <= 2009:
+            last = y % 100
+            last_words = " ".join(num2words(last).replace("-", " ").split())
+            return f"two thousand {last_words}"
+        if 1900 <= y <= 1999:
+            first = "nineteen"
+            last = y % 100
+            if last == 0:
+                return f"{first} hundred"
+            if last < 10:
+                return f"{first} oh {num2words(last)}"
+            return f"{first} " + " ".join(num2words(last).replace("-", " ").split())
+        if 1000 <= y <= 1899:
+            first = num2words(y // 100).replace("-", " ")
+            last = y % 100
+            if last == 0:
+                return f"{first} hundred"
+            if last < 10:
+                return f"{first} oh {num2words(last)}"
+            return f"{first} " + " ".join(num2words(last).replace("-", " ").split())
+        # fallback
+        return " ".join(num2words(y).replace("-", " ").split())
+
+    currency_units = {"$": "dollars", "€": "euros", "£": "pounds", "¥": "yen", "₹": "rupees", "฿": "baht"}
+
+    # --- 1) currency amounts ---
+    def _cur_repl(m):
+        sym = m.group("sym")
+        num = m.group("num")
+        unit = currency_units.get(sym, "dollars")
+        return f"{num_words(num)} {unit}"
+    text = re.sub(r'(?P<sym>[$€£¥₹฿])\s?(?P<num>\d{1,3}(?:,\d{3})*(?:\.\d+)?)', _cur_repl, text)
+
+    # --- 2) percentages ---
+    def _pct_repl(m):
+        val = m.group("num")
+        return f"{num_words(val)} percent"
+    text = re.sub(r'(?P<num>\d+(?:\.\d+)?)\s?%', _pct_repl, text)
+
+    # --- 3) years (four digits) ---
+    def _year_repl(m):
+        y = int(m.group(0))
+        return year_to_words(y)
+    text = re.sub(r'\b(1[0-9]{3}|20[0-9]{2})\b', _year_repl, text)
+
+    # --- 4) general numbers (avoid already-converted pieces) ---
+    def _num_repl(m):
+        s = m.group(0)
+        return " ".join(num_words(s).replace("-", " ").split())
+    text = re.sub(r'\b\d{1,3}(?:,\d{3})*(?:\.\d+)?\b', _num_repl, text)
+
+    # Tidy spaces
+    return re.sub(r'\s+', ' ', text).strip()
 
 # ---------- OpenAI (GPT-5 via Responses) ----------
 def chat(model: str, system_prompt: str, user_prompt: str) -> str:

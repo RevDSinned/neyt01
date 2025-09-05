@@ -6,7 +6,6 @@ import requests
 from PIL import Image, ImageDraw, ImageFont
 from moviepy.editor import ImageClip, AudioFileClip, concatenate_videoclips
 from openai import OpenAI
-from num2words import num2words
 
 # ---------- Paths ----------
 ROOT = pathlib.Path(__file__).parent
@@ -20,7 +19,7 @@ KEYWORDS_TXT = OUT / "keywords.txt"
 
 # ---------- Env / Clients ----------
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
-client = OpenAI()
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY", "")
 ELEVENLABS_VOICE_ID = os.environ.get("ELEVENLABS_VOICE_ID", "")
@@ -51,67 +50,6 @@ def seconds_from_mp3(path: pathlib.Path) -> float:
         return 0.0
     with AudioFileClip(str(path)) as a:
         return float(a.duration)
-import re
-from num2words import num2words
-
-
-def num_words(n_str: str) -> str:
-    s = n_str.replace(",", "")
-    if "." in s:
-        whole, frac = s.split(".", 1)
-        base = num2words(int(whole))
-        frac_words = " ".join(num2words(int(d)) for d in frac if d.isdigit())
-        return f"{base} point {frac_words}" if frac_words else base
-    return num2words(int(s))
-
-
-def year_to_words(y: int) -> str:
-    if y == 2000:
-        return "two thousand"
-    if 2001 <= y <= 2009:
-        return f"two thousand {num2words(y % 100)}"
-    if 2010 <= y <= 2099:
-        return f"twenty {num2words(y % 100)}"
-    return num2words(y)
-def normalize_numbers_for_voice(text: str) -> str:
-    """
-    Convert numerals to words for narration:
-    - Years: pair-speak (e.g., 1665 -> 'sixteen sixty five'; 2025 -> 'twenty twenty five'; 1905 -> 'nineteen oh five'; 1900 -> 'nineteen hundred'; 2000 -> 'two thousand').
-    - Currency: $/€/£/¥/₹/฿ -> '... dollars/euros/pounds/yen/rupees/baht' (uses 'point' for decimals).
-    - Percentages: '12%' -> 'twelve percent'
-    - General numbers: 1234 -> 'one thousand two hundred thirty four'
-    """
-    
-    currency_units = {"$": "dollars", "€": "euros", "£": "pounds", "¥": "yen", "₹": "rupees", "฿": "baht"}
-
-    # --- 1) currency amounts ---
-    def _cur_repl(m):
-        sym = m.group("sym")
-        num = m.group("num")
-        unit = currency_units.get(sym, "dollars")
-        return f"{num_words(num)} {unit}"
-    text = re.sub(r'(?P<sym>[$€£¥₹฿])\s?(?P<num>\d{1,3}(?:,\d{3})*(?:\.\d+)?)', _cur_repl, text)
-
-    # --- 2) percentages ---
-    def _pct_repl(m):
-        val = m.group("num")
-        return f"{num_words(val)} percent"
-    text = re.sub(r'(?P<num>\d+(?:\.\d+)?)\s?%', _pct_repl, text)
-
-    # --- 3) years (four digits) ---
-    def _year_repl(m):
-        y = int(m.group(0))
-        return year_to_words(y)
-    text = re.sub(r'\b(1[0-9]{3}|20[0-9]{2})\b', _year_repl, text)
-
-    # --- 4) general numbers (avoid already-converted pieces) ---
-    def _num_repl(m):
-        s = m.group(0)
-        return " ".join(num_words(s).replace("-", " ").split())
-    text = re.sub(r'\b\d{1,3}(?:,\d{3})*(?:\.\d+)?\b', _num_repl, text)
-
-    # Tidy spaces
-    return re.sub(r'\s+', ' ', text).strip()
 
 # ---------- OpenAI (GPT-5 via Responses) ----------
 def chat(model: str, system_prompt: str, user_prompt: str) -> str:
@@ -161,114 +99,7 @@ def critique_and_revise(cfg, script: str) -> str:
     ask = "Improve clarity, pacing, and retention cues. Keep length. Return revised narration only.\n\n" + script
     return chat(cfg["critic_model"], sys, ask)
 
-def extract_broll_keywords(cfg, script: str) -> list[str]:
-    """
-    Produce strong, chapter-aware b-roll keywords while filtering junk.
-    Returns a flat, de-duplicated list so the rest of the pipeline stays the same.
-    Also writes a structured plan to out/keywords.json for inspection.
-    """
-    import json, re
-
-    # Terms we never want (no more random cabbage or clip-arty stuff)
-    BLOCKLIST = {
-        "cabbage","lettuce","broccoli","cauliflower","salad","cartoon","clipart","vector",
-        "logo","pattern","wallpaper","abstract texture","template","comic","emoji","infographic"
-    }
-
-    # 1) Ask the model for a structured, chapter-wise plan (JSON)
-    sys = (
-        "You are a travel-video b-roll planner. Read the script and return compact JSON with:\n"
-        "{ \"global\": [ concise keywords],\n"
-        "  \"chapters\": [ {\"title\": \"...\", \"keywords\": [-12 concise keywords]} ] }\n"
-        "Use concrete nouns and scenes that match travel + MONEY when relevant "
-        "(e.g., cash close-up, currency exchange board, market price signs, ATM withdrawal, "
-        "credit card tap, budget accommodation room, bus/metro/plane). "
-        "No vague adjectives. No food unless the script explicitly mentions it. "
-        "Keywords should be short search phrases (2–4 words)."
-    )
-    txt = chat(cfg["critic_model"], sys, script)
-
-    plan = None
-    # try to parse JSON directly; if the model wrapped it in prose, extract the JSON blob
-    try:
-        plan = json.loads(txt)
-    except Exception:
-        m = re.search(r'\{.*\}', txt, flags=re.S)
-        if m:
-            try:
-                plan = json.loads(m.group(0))
-            except Exception:
-                plan = None
-
-    keywords: list[str] = []
-    structured = {"global": [], "chapters": []}
-
-    if isinstance(plan, dict):
-        g = plan.get("global", []) or []
-        keywords.extend(g)
-        for ch in plan.get("chapters", []) or []:
-            ks = ch.get("keywords", []) or []
-            structured["chapters"].append({"title": ch.get("title", ""), "keywords": ks})
-            keywords.extend(ks)
-        structured["global"] = g
-
-    # 2) Fallback if JSON failed: simple list like before, but tell it to favor money + location
-    if not keywords:
-        ask = (
-            "List 40 short, comma-separated b-roll search keywords (no numbering). "
-            "Favor money/finance visuals when the script references prices, budgets, cards, or cash; "
-            "otherwise prefer specific locations and travel scenes mentioned."
-        )
-        resp = chat(cfg["critic_model"], "You generate concise keyword lists.", ask + "\n\n" + script)
-        keywords = re.split(r"[,\n]", resp)
-
-    # 3) Clean, blocklist, and de-duplicate
-    cleaned: list[str] = []
-    seen = set()
-    for k in keywords:
-        k = (k or "").strip()
-        if not k:
-            continue
-        k = re.sub(r"[^a-zA-Z0-9\s\-'/,]+", "", k)           # drop odd chars
-        k = re.sub(r"\s+", " ", k).strip()
-        low = k.lower()
-        if low in seen:
-            continue
-        if any(b in low for b in BLOCKLIST):
-            continue
-        # discard overly generic single words
-        if len(k.split()) == 1 and k.lower() in {
-            "travel","city","street","building","nature","photo","landscape","people"
-        }:
-            continue
-        seen.add(low)
-        cleaned.append(k)
-
-    # 4) If the script talks about money, force-boost money visuals to the front
-    if re.search(r"\b(dollar|euro|peso|baht|yen|rupee|pound|card|cash|budget|price|cost|exchange|atm)\b",
-                 script, flags=re.I):
-        money_boost = [
-            "cash close up","counting money hands","credit card tap",
-            "currency exchange board","atm withdrawal","market price signs"
-        ]
-        for term in reversed(money_boost):  # insert at front preserving order
-            if term not in cleaned:
-                cleaned.insert(0, term)
-
-    # 5) Trim to a sensible maximum
-    cleaned = cleaned[:120]
-
-    # 6) Save the structured plan for review (optional)
-    try:
-        (OUT / "keywords.json").write_text(
-            json.dumps(structured, ensure_ascii=False, indent=2),
-            encoding="utf-8"
-        )
-    except Exception:
-        pass
-
-    return cleaned
-(cfg, script: str) -> List[str]:
+def extract_broll_keywords(cfg, script: str) -> List[str]:
     ask = "List 20 concise, comma-separated b-roll search keywords (no numbering)."
     resp = chat(cfg["critic_model"], "You generate concise keyword lists.", ask + "\n\n" + script)
     parts = [p.strip() for p in re.split(r"[,\n]", resp) if p.strip()]
@@ -414,7 +245,7 @@ def build_video(image_paths: List[pathlib.Path], audio_path: pathlib.Path, out_p
         audio = None
         total = 60.0
 
-    per = total / max(10, len(image_paths))
+    per = total / max(1, len(image_paths))
     clips = [ImageClip(str(p)).set_duration(per).resize(height=1080).on_color(size=(1920,1080), color=(0,0,0))
              for p in image_paths]
     video = concatenate_videoclips(clips, method="compose")
@@ -431,7 +262,7 @@ def build_video(image_paths: List[pathlib.Path], audio_path: pathlib.Path, out_p
 def make_thumbnail(title: str, cfg: dict) -> pathlib.Path:
     try:
         prompt = f"Bold, high-contrast travel thumbnail background, no text. Topic: {title}"
-        r = client.images.generate(model=cfg.get("image_model", "gpt-image-1"), prompt=prompt, size="1536x1024")
+        r = client.images.generate(model=cfg.get("image_model", "gpt-image-1"), prompt=prompt, size="1024x576")
         b64 = r.data[0].b64_json
         Image.open(io.BytesIO(base64.b64decode(b64))).save(THUMB, "PNG")
     except Exception as e:
@@ -446,17 +277,17 @@ def maybe_upload_to_youtube(cfg: dict, title: str, description: str, video_path:
         return
     try:
         from youtube_uploader import upload_video
-       upload_video(
-    str(video_path),
-    title,
-    description,
-    str(thumb_path) if thumb_path.exists() else None,
-    cfg.get("privacy_status", "public"),
-    str(cfg.get("category_id", "19")),
-    YT_CLIENT_ID,
-    YT_CLIENT_SECRET,
-    YT_REFRESH_TOKEN,
-)
+        upload_video(
+            video_path=str(video_path),
+            title=title,
+            description=description,
+            thumbnail_path=str(thumb_path) if thumb_path.exists() else None,
+            privacy_status=cfg.get("privacy_status", "public"),
+            category_id=str(cfg.get("category_id", "19")),
+            client_id=YT_CLIENT_ID,
+            client_secret=YT_CLIENT_SECRET,
+            refresh_token=YT_REFRESH_TOKEN,
+        )
     except Exception as e:
         print(f"YouTube upload skipped: {e}")
 
@@ -481,9 +312,8 @@ def run():
     save_text(KEYWORDS_TXT, ", ".join(kws))
 
     print("→ Narration (ElevenLabs)…")
-    elevenlabs_tts(cfg, normalize_numbers_for_voice(script2), VOICE_MP3)
-
-    dur = max(10.0, seconds_from_mp3(VOICE_MP3))
+    elevenlabs_tts(cfg, script2, VOICE_MP3)
+    dur = max(1.0, seconds_from_mp3(VOICE_MP3))
     print(f"Narration length: {dur:.1f}s")
 
     print("→ Fetching images…")

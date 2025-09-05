@@ -277,17 +277,18 @@ def maybe_upload_to_youtube(cfg: dict, title: str, description: str, video_path:
         return
     try:
         from youtube_uploader import upload_video
-        upload_video(
-            video_path=str(video_path),
-            title=title,
-            description=description,
-            thumbnail_path=str(thumb_path) if thumb_path.exists() else None,
-            privacy_status=cfg.get("privacy_status", "public"),
-            category_id=str(cfg.get("category_id", "19")),
-            client_id=YT_CLIENT_ID,
-            client_secret=YT_CLIENT_SECRET,
-            refresh_token=YT_REFRESH_TOKEN,
-        )
+vid = upload_video(
+    str(VIDEO_MP4),
+    title=title,
+    description=description,
+    thumbnail_path=str(THUMB),
+    privacy_status=cfg.get("privacy_status", "public"),
+    category_id=str(cfg.get("category_id", "19")),
+    client_id=YT_CLIENT_ID,
+    client_secret=YT_CLIENT_SECRET,
+    refresh_token=YT_REFRESH_TOKEN,
+    tags=tags,
+)
     except Exception as e:
         print(f"YouTube upload skipped: {e}")
 

@@ -1,14 +1,10 @@
 name: nomad-econ-yt
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
   schedule:
-    - cron: '59 19 * * 6'  # Saturday 11:59 AM PT (19:59 UTC)
-    - cron: '59 19 * * 0'  # Sunday   11:59 AM PT (19:59 UTC)
-
-concurrency:
-  group: nomad-econ-yt
-  cancel-in-progress: false
+    - cron: "0 14 * * 1-5"
+    - cron: "0 15 * * 1-5"
 
 jobs:
   build-run:
@@ -49,11 +45,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: out
-          path: |
-            out/**
-            out/img/**
-            out/voice.mp3
-            out/video.mp4
-            out/thumb.png
-          if-no-files-found: ignore
-          retention-days: 7
+          path: out/

@@ -51,6 +51,28 @@ def seconds_from_mp3(path: pathlib.Path) -> float:
         return 0.0
     with AudioFileClip(str(path)) as a:
         return float(a.duration)
+import re
+from num2words import num2words
+
+
+def num_words(n_str: str) -> str:
+    s = n_str.replace(",", "")
+    if "." in s:
+        whole, frac = s.split(".", 1)
+        base = num2words(int(whole))
+        frac_words = " ".join(num2words(int(d)) for d in frac if d.isdigit())
+        return f"{base} point {frac_words}" if frac_words else base
+    return num2words(int(s))
+
+
+def year_to_words(y: int) -> str:
+    if y == 2000:
+        return "two thousand"
+    if 2001 <= y <= 2009:
+        return f"two thousand {num2words(y % 100)}"
+    if 2010 <= y <= 2099:
+        return f"twenty {num2words(y % 100)}"
+    return num2words(y)
 def normalize_numbers_for_voice(text: str) -> str:
     """
     Convert numerals to words for narration:
@@ -59,51 +81,7 @@ def normalize_numbers_for_voice(text: str) -> str:
     - Percentages: '12%' -> 'twelve percent'
     - General numbers: 1234 -> 'one thousand two hundred thirty four'
     """
-    import re
-from num2words import num2words
-
-    # --- helpers ---
-    def num_words(n_str: str) -> str:
-        # supports commas/decimals
-        s = n_str.replace(",", "")
-        if "." in s:
-            whole, frac = s.split(".", 1)
-            base = num2words(int(whole))
-            # spell decimal as "point five six"
-            frac_words = " ".join(num2words(int(d)) for d in frac if d.isdigit())
-            return f"{base} point {frac_words}" if frac_words else base
-        return num2words(int(s))
-
-    def year_to_words(y: int) -> str:
-        if y == 2000:
-            return "two thousand"
-        if 2010 <= y <= 2099:
-            last = y % 100
-            last_words = " ".join(num2words(last).replace("-", " ").split())
-            return f"twenty {last_words}"
-        if 2001 <= y <= 2009:
-            last = y % 100
-            last_words = " ".join(num2words(last).replace("-", " ").split())
-            return f"two thousand {last_words}"
-        if 1900 <= y <= 1999:
-            first = "nineteen"
-            last = y % 100
-            if last == 0:
-                return f"{first} hundred"
-            if last < 10:
-                return f"{first} oh {num2words(last)}"
-            return f"{first} " + " ".join(num2words(last).replace("-", " ").split())
-        if 1000 <= y <= 1899:
-            first = num2words(y // 100).replace("-", " ")
-            last = y % 100
-            if last == 0:
-                return f"{first} hundred"
-            if last < 10:
-                return f"{first} oh {num2words(last)}"
-            return f"{first} " + " ".join(num2words(last).replace("-", " ").split())
-        # fallback
-        return " ".join(num2words(y).replace("-", " ").split())
-
+    
     currency_units = {"$": "dollars", "€": "euros", "£": "pounds", "¥": "yen", "₹": "rupees", "฿": "baht"}
 
     # --- 1) currency amounts ---

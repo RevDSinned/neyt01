@@ -1,10 +1,10 @@
 name: nomad-econ-yt
 
 on:
-  workflow_dispatch: {}         # enables the "Run workflow" button
-  schedule:                     # UTC: 19:59 = 11:59 AM Pacific
-    - cron: '59 19 * * 6'       # Saturday 11:59 AM PT
-    - cron: '59 19 * * 0'       # Sunday   11:59 AM PT
+  workflow_dispatch: {}
+  schedule:
+    - cron: '59 19 * * 6'  # Saturday 11:59 AM PT (19:59 UTC)
+    - cron: '59 19 * * 0'  # Sunday   11:59 AM PT (19:59 UTC)
 
 concurrency:
   group: nomad-econ-yt
@@ -25,7 +25,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: 3.11
 
       - name: Install Python deps
         run: |
@@ -49,4 +49,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: out
-          path: out/
+          path: |
+            out/**
+            out/img/**
+            out/voice.mp3
+            out/video.mp4
+            out/thumb.png
+          if-no-files-found: ignore
+          retention-days: 7

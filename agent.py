@@ -270,27 +270,83 @@ def make_thumbnail(title: str, cfg: dict) -> pathlib.Path:
         fallback_background(title, 1280, 720).save(THUMB, "PNG")
     return THUMB
 
+from pathlib import Path
+
 # ---------- Optional YouTube upload ----------
-def maybe_upload_to_youtube(cfg: dict, title: str, description: str, video_path: pathlib.Path, thumb_path: pathlib.Path):
-    if not (YT_CLIENT_ID and YT_CLIENT_SECRET and YT_REFRESH_TOKEN):
+def maybe_upload_to_youtube(
+    cfg: dict,
+    title: str,
+    description: str,
+    video_path: Path,
+    thumb_path: Path | None,
+):
+    # 0) Secrets present?
+    if not all([YT_CLIENT_ID, YT_CLIENT_SECRET, YT_REFRESH_TOKEN]):
         print("YouTube secrets not set; skipping upload.")
-        return
+        return None
+
+    # 1) Inputs exist?
+    if not Path(video_path).exists():
+        print(f"Video not found: {video_path}; skipping upload.")
+        return None
+    if thumb_path and not Path(thumb_path).exists():
+        print(f"Thumbnail not found: {thumb_path}; will upload without a thumbnail.")
+        thumb_path = None
+
+    # 2) Normalize config
+    privacy = str(cfg.get("privacy_status", "public")).lower()
+    if privacy not in {"public", "unlisted", "private"}:
+        privacy = "public"
+
+    category_id = str(cfg.get("category_id", "19"))
+
+    # tags may be list/tuple/set/str/None
+    raw_tags = cfg.get("tags", [])
+    if isinstance(raw_tags, str):
+        tags_list = [t.strip() for t in raw_tags.split(",") if t.strip()]
+    elif isinstance(raw_tags, (list, tuple, set)):
+        tags_list = [str(t) for t in raw_tags if str(t).strip()]
+    else:
+        tags_list = []
+
+    # enforce YouTube 500-char total budget across tags (commas count)
+    total = 0
+    trimmed = []
+    for t in tags_list:
+        add = len(t)
+        sep = 1 if trimmed else 0  # comma between tags
+        if total + sep + add > 500:
+            break
+        trimmed.append(t)
+        total += sep + add
+    tags_list = trimmed
+
+    # 3) Import uploader
     try:
         from youtube_uploader import upload_video
-vid = upload_video(
-    str(VIDEO_MP4),
-    title=title,
-    description=description,
-    thumbnail_path=str(THUMB),
-    privacy_status=cfg.get("privacy_status", "public"),
-    category_id=str(cfg.get("category_id", "19")),
-    client_id=YT_CLIENT_ID,
-    client_secret=YT_CLIENT_SECRET,
-    refresh_token=YT_REFRESH_TOKEN,
-    tags=tags,
-)
+    except Exception as e:
+        print(f"YouTube uploader import failed: {e}; skipping upload.")
+        return None
+
+    # 4) Upload
+    try:
+        video_id = upload_video(
+            str(video_path),
+            title=title[:100],
+            description=description[:5000],
+            thumbnail_path=str(thumb_path) if thumb_path else None,
+            privacy_status=privacy,
+            category_id=category_id,
+            client_id=YT_CLIENT_ID,
+            client_secret=YT_CLIENT_SECRET,
+            refresh_token=YT_REFRESH_TOKEN,
+            tags=tags_list,
+        )
+        print(f"YouTube upload complete: https://youtu.be/{video_id}")
+        return video_id
     except Exception as e:
         print(f"YouTube upload skipped: {e}")
+        return None
 
 # ---------- Orchestration ----------
 def run():

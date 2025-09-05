@@ -1,12 +1,13 @@
 name: nomad-econ-yt
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "59 19 * * 6"  # Saturday 11:59 AM PST
+    - cron: "59 19 * * 0"  # Sunday   11:59 AM PST
 
-4 on:
-5   workflow_dispatch:
-6   schedule:
-7     - cron: "59 19 * * 6"   # Saturday 11:59 AM PT (19:59 UTC)
-8     - cron: "59 19 * * 0"   # Sunday   11:59 AM PT (19:59 UTC)
-
-
+concurrency:
+  group: nomad-econ-yt
+  cancel-in-progress: true
 
 jobs:
   build-run:

@@ -273,19 +273,11 @@ def make_thumbnail(title: str, cfg: dict) -> pathlib.Path:
 from pathlib import Path
 
 # ---------- Optional YouTube upload ----------
-def maybe_upload_to_youtube(
-    cfg: dict,
-    title: str,
-    description: str,
-    video_path: Path,
-    thumb_path: Path | None,
-):
-    # 0) Secrets present?
+def maybe_upload_to_youtube(cfg: dict, title: str, description: str, video_path: Path, thumb_path: Path | None):
     if not all([YT_CLIENT_ID, YT_CLIENT_SECRET, YT_REFRESH_TOKEN]):
         print("YouTube secrets not set; skipping upload.")
         return None
 
-    # 1) Inputs exist?
     if not Path(video_path).exists():
         print(f"Video not found: {video_path}; skipping upload.")
         return None
@@ -293,61 +285,58 @@ def maybe_upload_to_youtube(
         print(f"Thumbnail not found: {thumb_path}; will upload without a thumbnail.")
         thumb_path = None
 
-    # 2) Normalize config
     privacy = str(cfg.get("privacy_status", "public")).lower()
     if privacy not in {"public", "unlisted", "private"}:
         privacy = "public"
-
     category_id = str(cfg.get("category_id", "19"))
 
-    # tags may be list/tuple/set/str/None
     raw_tags = cfg.get("tags", [])
     if isinstance(raw_tags, str):
         tags_list = [t.strip() for t in raw_tags.split(",") if t.strip()]
     elif isinstance(raw_tags, (list, tuple, set)):
-        tags_list = [str(t) for t in raw_tags if str(t).strip()]
+        tags_list = [str(t).strip() for t in raw_tags if str(t).strip()]
     else:
         tags_list = []
-
-    # enforce YouTube 500-char total budget across tags (commas count)
-    total = 0
-    trimmed = []
+    # trim to YouTube's ~500-char total across tags (commas count)
+    total = 0; trimmed = []
     for t in tags_list:
-        add = len(t)
-        sep = 1 if trimmed else 0  # comma between tags
-        if total + sep + add > 500:
+        sep = 1 if trimmed else 0
+        if total + sep + len(t) > 500:
             break
-        trimmed.append(t)
-        total += sep + add
+        trimmed.append(t); total += sep + len(t)
     tags_list = trimmed
 
-    # 3) Import uploader
     try:
         from youtube_uploader import upload_video
     except Exception as e:
         print(f"YouTube uploader import failed: {e}; skipping upload.")
         return None
 
-    # 4) Upload
+    params = set(inspect.signature(upload_video).parameters)
+    # pass only common content fields; DO NOT pass client_id/client_secret/refresh_token
+    candidate = {
+        "title": title[:100],
+        "description": description[:5000],
+        "thumbnail_path": str(thumb_path) if thumb_path else None,
+        "thumbnail": str(thumb_path) if thumb_path else None,
+        "thumb": str(thumb_path) if thumb_path else None,
+        "privacy_status": privacy,
+        "privacy": privacy,
+        "category_id": category_id,
+        "category": category_id,
+        "categoryId": category_id,
+        "tags": tags_list,
+    }
+    kwargs = {k: v for k, v in candidate.items() if k in params and v is not None}
+
     try:
-        video_id = upload_video(
-            str(video_path),
-            title=title[:100],
-            description=description[:5000],
-            thumbnail_path=str(thumb_path) if thumb_path else None,
-            privacy_status=privacy,
-            category_id=category_id,
-            client_id=YT_CLIENT_ID,
-            client_secret=YT_CLIENT_SECRET,
-            refresh_token=YT_REFRESH_TOKEN,
-            tags=tags_list,
-        )
+        video_id = upload_video(str(video_path), **kwargs)
         print(f"YouTube upload complete: https://youtu.be/{video_id}")
         return video_id
     except Exception as e:
         print(f"YouTube upload skipped: {e}")
         return None
-
+        
 # ---------- Orchestration ----------
 def run():
     ensure_dirs()

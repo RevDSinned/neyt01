@@ -261,8 +261,8 @@ def build_video(image_paths: List[pathlib.Path], audio_path: pathlib.Path, out_p
 # ---------- Thumbnail ----------
 def make_thumbnail(title: str, cfg: dict) -> pathlib.Path:
     try:
-        prompt = f"Bold, high-contrast travel thumbnail background, no text. Topic: {title}"
-        r = client.images.generate(model=cfg.get("image_model", "gpt-image-1"), prompt=prompt, size="1024x576")
+        prompt = f"Bold, high-contrast photo real travel thumbnail background, no text. Topic: {title}"
+        r = client.images.generate(model=cfg.get("image_model", "gpt-image-1"), prompt=prompt, size="1536x1024")
         b64 = r.data[0].b64_json
         Image.open(io.BytesIO(base64.b64decode(b64))).save(THUMB, "PNG")
     except Exception as e:

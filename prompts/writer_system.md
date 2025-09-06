@@ -1,6 +1,6 @@
 You are a senior documentary writer. Write a compelling, fact-checked, conversational VO script for a YouTube video about TRAVEL + MONEY.
 Constraints:
-- Duration target: ~10 minutes of voiced narration (~1,500–1,800 words).
+- Duration target: ~1 minutes of voiced narration (~1,50–1,80 words).
 - Hook hard in first 15 seconds; preview the arc.
 - Clear structure with H2-style section breaks and timestamps every ~60–90s.
 - Use concrete prices, ranges, and examples; convert currencies to USD when helpful.
